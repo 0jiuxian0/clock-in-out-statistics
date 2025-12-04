@@ -2,9 +2,19 @@
   <div :class="['app', { 'dark-mode': isDarkMode }]">
     <header class="header">
       <h1>打卡统计计算器</h1>
-      <button class="theme-toggle" @click="toggleTheme" :aria-label="isDarkMode ? '切换到浅色模式' : '切换到深色模式'">
-        {{ isDarkMode ? '☀️' : '🌙' }}
-      </button>
+      <div class="header-actions">
+        <button 
+          class="clear-cache-btn" 
+          @click="clearCache"
+          :aria-label="'清除缓存数据'"
+          title="清除缓存数据"
+        >
+          🗑️ 清除缓存
+        </button>
+        <button class="theme-toggle" @click="toggleTheme" :aria-label="isDarkMode ? '切换到浅色模式' : '切换到深色模式'">
+          {{ isDarkMode ? '☀️' : '🌙' }}
+        </button>
+      </div>
     </header>
 
     <main class="main-content">
@@ -262,6 +272,25 @@ const updateExcludedDates = (dates) => {
     calculateAllMonthsStatistics(rawRecords.value)
   }
   saveToLocalStorage()
+}
+
+// 清除缓存数据
+const clearCache = () => {
+  if (confirm('确定要清除所有缓存数据吗？这将清除统计数据、排除日期设置等，但不会清除主题设置。')) {
+    // 清除统计数据
+    localStorage.removeItem('statistics')
+    localStorage.removeItem('excludedDates')
+    
+    // 重置数据
+    monthsData.value = []
+    activeMonth.value = null
+    rawRecords.value = []
+    processedRecords.value = []
+    customExcludedDates.value = []
+    
+    console.log('✅ [缓存清除] 已清除所有缓存数据')
+    alert('缓存数据已清除')
+  }
 }
 
 // 保存到localStorage
