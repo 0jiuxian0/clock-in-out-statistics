@@ -59,18 +59,40 @@ export function calculateOvertimeHours(clockTime) {
 /**
  * 处理打卡记录，计算加班时长
  * @param {Array} records - 打卡记录数组
- * @param {Array} customExcludedDates - 用户手动排除的日期列表
+ * @param {Object} customConfig - 自定义配置对象
  * @returns {Array} 处理后的记录，包含加班时长
  */
-export function processClockRecords(records, customExcludedDates = []) {
+export function processClockRecords(records, customConfig = {}) {
   console.log('🔄 [记录处理] 开始处理打卡记录')
   console.log('🔄 [记录处理] 原始记录数量:', records.length)
-  console.log('🔄 [记录处理] 排除日期:', customExcludedDates)
+  console.log('🔄 [记录处理] 自定义配置:', customConfig)
+  
+  const excludedClockRecords = customConfig.excludedClockRecords || []
+  const customClockRecords = customConfig.customClockRecords || []
   
   // 按日期分组，同一天取最晚的下班记录
   const dateMap = new Map()
   let processedCount = 0
   let skippedCount = 0
+  
+  // 先处理用户自定义的打卡记录
+  customClockRecords.forEach(customRecord => {
+    const dateStr = customRecord.date
+    if (dateStr) {
+      const clockTime = customRecord.time || ''
+      const overtimeHours = clockTime ? calculateOvertimeHours(clockTime) : 0
+      dateMap.set(dateStr, {
+        date: dateStr,
+        originalDate: dateStr,
+        clockTime: clockTime,
+        overtimeHours: overtimeHours,
+        hasClockRecord: true,
+        isCustom: true // 标记为自定义记录
+      })
+      processedCount++
+      console.log(`📝 [记录处理] 添加自定义打卡记录: ${dateStr} ${clockTime || '(空)'}`)
+    }
+  })
   
   records.forEach((record, index) => {
     const date = parseDate(record.date)
@@ -85,9 +107,16 @@ export function processClockRecords(records, customExcludedDates = []) {
     const dateStr = formatDate(date)
     
     // 如果该日期被用户排除，跳过
-    if (customExcludedDates.includes(dateStr)) {
+    if (excludedClockRecords.includes(dateStr)) {
       skippedCount++
-      console.log(`⏭️ [记录处理] 跳过排除日期: ${dateStr}`)
+      console.log(`⏭️ [记录处理] 跳过排除的打卡记录: ${dateStr}`)
+      return
+    }
+    
+    // 如果该日期已有自定义记录，跳过原始记录
+    if (dateMap.has(dateStr) && dateMap.get(dateStr).isCustom) {
+      skippedCount++
+      console.log(`⏭️ [记录处理] 跳过原始记录（已有自定义记录）: ${dateStr}`)
       return
     }
     

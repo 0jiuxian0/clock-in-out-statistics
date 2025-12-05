@@ -4,23 +4,36 @@ import { isHoliday, formatDate } from './holidays.js'
  * 获取指定月份的所有工作日
  * @param {number} year - 年份
  * @param {number} month - 月份 (1-12)
- * @param {Array} customExcludedDates - 用户手动排除的日期列表
+ * @param {Object} customConfig - 自定义配置对象
  * @returns {Array} 工作日日期数组
  */
-export function getWorkdaysInMonth(year, month, customExcludedDates = []) {
+export function getWorkdaysInMonth(year, month, customConfig = {}) {
   const workdays = []
   const firstDay = new Date(year, month - 1, 1)
   const lastDay = new Date(year, month, 0)
   
+  const customWorkdays = customConfig.customWorkdays || []
+  const excludedWorkdays = customConfig.excludedWorkdays || []
+  
   for (let day = 1; day <= lastDay.getDate(); day++) {
     const date = new Date(year, month - 1, day)
     const dayOfWeek = date.getDay()
+    const dateStr = formatDate(date)
+    
+    // 检查是否是用户自定义的工作日（如调休的周六日）
+    if (customWorkdays.includes(dateStr)) {
+      workdays.push(dateStr)
+      continue
+    }
     
     // 排除周末（周六=6, 周日=0）
     if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-      // 排除节假日和用户手动排除的日期
-      if (!isHoliday(date, customExcludedDates)) {
-        workdays.push(formatDate(date))
+      // 排除节假日
+      if (!isHoliday(date, [])) {
+        // 排除用户手动排除的工作日
+        if (!excludedWorkdays.includes(dateStr)) {
+          workdays.push(dateStr)
+        }
       }
     }
   }
@@ -55,16 +68,16 @@ export function getWorkedDays(clockRecords, year, month) {
  * @param {number} year - 年份
  * @param {number} month - 月份
  * @param {number} workedDays - 已上班天数
- * @param {Array} customExcludedDates - 用户手动排除的日期列表
+ * @param {Object} customConfig - 自定义配置对象
  * @returns {number} 剩余工作日
  */
-export function getRemainingWorkdays(year, month, workedDays, customExcludedDates = []) {
+export function getRemainingWorkdays(year, month, workedDays, customConfig = {}) {
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayStr = formatDate(today)
   
   // 获取该月所有工作日
-  const allWorkdays = getWorkdaysInMonth(year, month, customExcludedDates)
+  const allWorkdays = getWorkdaysInMonth(year, month, customConfig)
   
   // 过滤出未来的工作日（包括今天）
   const futureWorkdays = allWorkdays.filter(dateStr => {
@@ -80,11 +93,11 @@ export function getRemainingWorkdays(year, month, workedDays, customExcludedDate
  * 获取指定月份的所有工作日数量（不排除已过去的）
  * @param {number} year - 年份
  * @param {number} month - 月份
- * @param {Array} customExcludedDates - 用户手动排除的日期列表
+ * @param {Object} customConfig - 自定义配置对象
  * @returns {number} 工作日总数
  */
-export function getTotalWorkdaysInMonth(year, month, customExcludedDates = []) {
-  return getWorkdaysInMonth(year, month, customExcludedDates).length
+export function getTotalWorkdaysInMonth(year, month, customConfig = {}) {
+  return getWorkdaysInMonth(year, month, customConfig).length
 }
 
 /**

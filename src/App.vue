@@ -35,8 +35,11 @@
           <Statistics 
             :statistics="currentMonthStats"
             :month-name="formatMonthName(activeMonth.year, activeMonth.month)"
-            :customExcludedDates="customExcludedDates"
-            @update-excluded-dates="updateExcludedDates"
+            :custom-config="customConfig"
+            :processed-records="processedRecords"
+            :active-month="activeMonth"
+            @update-custom-config="updateCustomConfig"
+            @month-change="handleMonthChange"
             :isDarkMode="isDarkMode"
           />
           
@@ -65,9 +68,20 @@ import { formatDate } from './utils/holidays.js'
 const isDarkMode = ref(false)
 const monthsData = ref([]) // 存储所有月份的数据
 const activeMonth = ref(null) // 当前选中的月份
-const customExcludedDates = ref([])
 const rawRecords = ref([])
 const processedRecords = ref([]) // 处理后的打卡记录
+
+// 自定义配置数据结构
+const customConfig = ref({
+  // 工作日自定义：添加的工作日（如调休的周六日）
+  customWorkdays: [],
+  // 排除的工作日（从工作日中排除）
+  excludedWorkdays: [],
+  // 打卡记录自定义：排除的打卡记录日期
+  excludedClockRecords: [],
+  // 新增的打卡记录：{ date: '2025-12-01', time: '20:30' }
+  customClockRecords: []
+})
 
 // 当前月份的统计数据
 const currentMonthStats = computed(() => {
@@ -87,10 +101,28 @@ onMounted(() => {
     document.documentElement.classList.add('dark')
   }
 
-  // 加载排除日期
-  const savedExcludedDates = localStorage.getItem('excludedDates')
-  if (savedExcludedDates) {
-    customExcludedDates.value = JSON.parse(savedExcludedDates)
+  // 加载自定义配置
+  const savedConfig = localStorage.getItem('customConfig')
+  if (savedConfig) {
+    try {
+      const parsed = JSON.parse(savedConfig)
+      // 确保所有字段都存在
+      customConfig.value = {
+        customWorkdays: parsed.customWorkdays || [],
+        excludedWorkdays: parsed.excludedWorkdays || [],
+        excludedClockRecords: parsed.excludedClockRecords || [],
+        customClockRecords: parsed.customClockRecords || []
+      }
+    } catch (e) {
+      console.error('加载自定义配置失败:', e)
+      // 使用默认值
+      customConfig.value = {
+        customWorkdays: [],
+        excludedWorkdays: [],
+        excludedClockRecords: [],
+        customClockRecords: []
+      }
+    }
   }
 
   // 加载统计数据
@@ -101,7 +133,6 @@ onMounted(() => {
       monthsData.value = data.monthsData || []
       rawRecords.value = data.rawRecords || []
       processedRecords.value = data.processedRecords || []
-      customExcludedDates.value = data.excludedDates || []
       
       // 恢复选中的月份，默认选择当前月份
       const today = new Date()
@@ -159,8 +190,8 @@ const handleFileUploaded = async (file) => {
 
 // 计算所有月份的统计数据
 const calculateAllMonthsStatistics = (records) => {
-  // 处理打卡记录
-  processedRecords.value = processClockRecords(records, customExcludedDates.value)
+  // 处理打卡记录（考虑自定义配置）
+  processedRecords.value = processClockRecords(records, customConfig.value)
   
   // 识别所有月份
   const months = detectMonths(records)
@@ -177,8 +208,20 @@ const calculateAllMonthsStatistics = (records) => {
   
   monthsData.value = allMonthsData
   
-  // 设置默认选中的月份（当前月份或第一个月份）
+  // 设置默认选中的月份（只在没有选中月份或选中月份不在数据中时才设置）
   if (allMonthsData.length > 0) {
+    // 如果已有选中的月份，检查是否还在数据中
+    if (activeMonth.value) {
+      const exists = allMonthsData.find(m => 
+        m.year === activeMonth.value.year && m.month === activeMonth.value.month
+      )
+      if (exists) {
+        // 选中的月份还在，保持不变
+        return
+      }
+    }
+    
+    // 没有选中月份或选中的月份不在数据中，设置默认月份
     const today = new Date()
     const currentYear = today.getFullYear()
     const currentMonth = today.getMonth() + 1
@@ -212,15 +255,15 @@ const calculateMonthStatistics = (year, month) => {
     return date.getFullYear() === year && date.getMonth() + 1 === month
   }).length
   
-  // 获取该月总工作日数
-  const totalWorkdays = getTotalWorkdaysInMonth(year, month, customExcludedDates.value)
+  // 获取该月总工作日数（考虑工作日自定义）
+  const totalWorkdays = getTotalWorkdaysInMonth(year, month, customConfig.value)
   
   // 计算已过去的工作日（从月初到今天）
   const today = new Date()
   today.setHours(0, 0, 0, 0)
   const todayStr = formatDate(today)
   
-  const allWorkdays = getWorkdaysInMonth(year, month, customExcludedDates.value)
+  const allWorkdays = getWorkdaysInMonth(year, month, customConfig.value)
   
   // 判断是否是过去的月份
   const isPastMonth = year < today.getFullYear() || 
@@ -239,7 +282,7 @@ const calculateMonthStatistics = (year, month) => {
   }
   
   // 计算剩余工作日
-  const remainingWorkdays = getRemainingWorkdays(year, month, actualWorkedDays, customExcludedDates.value)
+  const remainingWorkdays = getRemainingWorkdays(year, month, actualWorkedDays, customConfig.value)
   
   // 计算距离22小时还差多少
   const targetHours = 22
@@ -265,28 +308,39 @@ const handleMonthChange = (monthItem) => {
   saveToLocalStorage()
 }
 
-// 更新排除日期
-const updateExcludedDates = (dates) => {
-  customExcludedDates.value = dates
+// 更新自定义配置
+const updateCustomConfig = (config) => {
+  customConfig.value = config
+  // 保存当前选中的月份，避免重新计算时被重置
+  const savedActiveMonth = activeMonth.value
   if (rawRecords.value.length > 0) {
     calculateAllMonthsStatistics(rawRecords.value)
+    // 恢复之前选中的月份
+    if (savedActiveMonth) {
+      activeMonth.value = savedActiveMonth
+    }
   }
   saveToLocalStorage()
 }
 
 // 清除缓存数据
 const clearCache = () => {
-  if (confirm('确定要清除所有缓存数据吗？这将清除统计数据、排除日期设置等，但不会清除主题设置。')) {
+  if (confirm('确定要清除所有缓存数据吗？这将清除统计数据、自定义配置等，但不会清除主题设置。')) {
     // 清除统计数据
     localStorage.removeItem('statistics')
-    localStorage.removeItem('excludedDates')
+    localStorage.removeItem('customConfig')
     
     // 重置数据
     monthsData.value = []
     activeMonth.value = null
     rawRecords.value = []
     processedRecords.value = []
-    customExcludedDates.value = []
+    customConfig.value = {
+      customWorkdays: [],
+      excludedWorkdays: [],
+      excludedClockRecords: [],
+      customClockRecords: []
+    }
     
     console.log('✅ [缓存清除] 已清除所有缓存数据')
     alert('缓存数据已清除')
@@ -295,13 +349,12 @@ const clearCache = () => {
 
 // 保存到localStorage
 const saveToLocalStorage = () => {
-  localStorage.setItem('excludedDates', JSON.stringify(customExcludedDates.value))
+  localStorage.setItem('customConfig', JSON.stringify(customConfig.value))
   if (monthsData.value.length > 0) {
     localStorage.setItem('statistics', JSON.stringify({
       monthsData: monthsData.value,
       rawRecords: rawRecords.value,
       processedRecords: processedRecords.value,
-      excludedDates: customExcludedDates.value,
       activeMonth: activeMonth.value
     }))
   }
