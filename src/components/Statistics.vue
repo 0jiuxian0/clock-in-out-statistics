@@ -50,7 +50,7 @@
     <div class="calendars-container">
       <div class="calendar-section" :class="{ 'dark': isDarkMode }">
         <h3 class="calendar-section-title">工作日设置</h3>
-        <p class="calendar-section-hint">点击日期切换工作日状态（绿色=工作日，灰色=非工作日）</p>
+        <p class="calendar-section-hint">点击日期切换工作日状态（绿色=工作日，灰色=非工作日，红色=已排除）</p>
         <CalendarView
           :year="activeMonthYear"
           :month="activeMonthMonth"

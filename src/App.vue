@@ -329,13 +329,41 @@ const updateCustomConfig = (config) => {
   customConfig.value = config
   // 保存当前选中的月份，避免重新计算时被重置
   const savedActiveMonth = activeMonth.value
+  
+  // 无论是否有原始记录，都要重新处理打卡记录（包括自定义记录）
+  processedRecords.value = processClockRecords(rawRecords.value, customConfig.value)
+  
   if (rawRecords.value.length > 0) {
+    // 如果有原始记录，重新计算所有月份的统计数据
     calculateAllMonthsStatistics(rawRecords.value)
     // 恢复之前选中的月份
     if (savedActiveMonth) {
       activeMonth.value = savedActiveMonth
     }
+  } else {
+    // 如果没有原始记录，但可能有自定义记录，需要更新当前月份的统计数据
+    // 通过触发 currentMonthStats 的重新计算来实现
+    // 由于 currentMonthStats 是计算属性，它会自动使用更新后的 processedRecords
+    // 但需要确保 monthsData 中包含当前月份
+    if (activeMonth.value) {
+      const { year, month } = activeMonth.value
+      const existingMonthData = monthsData.value.find(m => 
+        m.year === year && m.month === month
+      )
+      if (existingMonthData) {
+        // 更新现有月份的数据
+        existingMonthData.stats = calculateMonthStatistics(year, month)
+      } else {
+        // 添加当前月份的数据
+        monthsData.value.push({
+          year,
+          month,
+          stats: calculateMonthStatistics(year, month)
+        })
+      }
+    }
   }
+  
   saveToLocalStorage()
 }
 
