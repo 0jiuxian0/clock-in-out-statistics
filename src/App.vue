@@ -374,9 +374,13 @@ const clearCache = () => {
     localStorage.removeItem('statistics')
     localStorage.removeItem('customConfig')
     
+    // 保存当前月份，以便清除后仍然显示当月tab
+    const today = new Date()
+    const currentYear = today.getFullYear()
+    const currentMonth = today.getMonth() + 1
+    
     // 重置数据
     monthsData.value = []
-    activeMonth.value = null
     rawRecords.value = []
     processedRecords.value = []
     customConfig.value = {
@@ -385,6 +389,9 @@ const clearCache = () => {
       excludedClockRecords: [],
       customClockRecords: []
     }
+    
+    // 保留当前月份作为activeMonth，这样页面仍然会显示当月tab
+    activeMonth.value = { year: currentYear, month: currentMonth }
     
     console.log('✅ [缓存清除] 已清除所有缓存数据')
     alert('缓存数据已清除')
