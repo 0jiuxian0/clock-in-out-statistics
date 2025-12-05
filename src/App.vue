@@ -23,9 +23,11 @@
         :isDarkMode="isDarkMode"
       />
 
-      <div v-if="monthsData && monthsData.length > 0" class="statistics-container">
+      <div v-if="activeMonth" class="statistics-container">
         <MonthTabs
-          :months="monthsData.map(m => ({ year: m.year, month: m.month }))"
+          :months="monthsData && monthsData.length > 0 
+            ? monthsData.map(m => ({ year: m.year, month: m.month }))
+            : [{ year: activeMonth.year, month: activeMonth.month }]"
           :active-month="activeMonth"
           @month-change="handleMonthChange"
           :isDarkMode="isDarkMode"
@@ -89,7 +91,11 @@ const currentMonthStats = computed(() => {
   const monthData = monthsData.value.find(m => 
     m.year === activeMonth.value.year && m.month === activeMonth.value.month
   )
-  return monthData ? monthData.stats : null
+  if (monthData) {
+    return monthData.stats
+  }
+  // 如果没有数据，直接计算当前月份的统计数据（即使没有打卡记录）
+  return calculateMonthStatistics(activeMonth.value.year, activeMonth.value.month)
 })
 
 // 从localStorage加载数据
@@ -127,6 +133,12 @@ onMounted(() => {
 
   // 加载统计数据
   const savedStatistics = localStorage.getItem('statistics')
+  
+  // 获取当前月份作为默认值
+  const today = new Date()
+  const currentYear = today.getFullYear()
+  const currentMonth = today.getMonth() + 1
+  
   if (savedStatistics) {
     try {
       const data = JSON.parse(savedStatistics)
@@ -135,10 +147,6 @@ onMounted(() => {
       processedRecords.value = data.processedRecords || []
       
       // 恢复选中的月份，默认选择当前月份
-      const today = new Date()
-      const currentYear = today.getFullYear()
-      const currentMonth = today.getMonth() + 1
-      
       const savedActiveMonth = data.activeMonth
       if (savedActiveMonth) {
         activeMonth.value = savedActiveMonth
@@ -150,10 +158,18 @@ onMounted(() => {
         activeMonth.value = currentMonthData 
           ? { year: currentYear, month: currentMonth }
           : { year: monthsData.value[0].year, month: monthsData.value[0].month }
+      } else {
+        // 如果没有数据，默认显示当前月份
+        activeMonth.value = { year: currentYear, month: currentMonth }
       }
     } catch (e) {
       console.error('加载统计数据失败:', e)
+      // 如果加载失败，默认显示当前月份
+      activeMonth.value = { year: currentYear, month: currentMonth }
     }
+  } else {
+    // 如果没有保存的数据，默认显示当前月份
+    activeMonth.value = { year: currentYear, month: currentMonth }
   }
 })
 
