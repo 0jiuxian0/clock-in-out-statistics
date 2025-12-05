@@ -192,16 +192,94 @@ const handleFileUploaded = async (file) => {
     const { detail } = await parseExcel(file)
     console.log('📤 [文件上传] Excel解析完成，详情数据行数:', detail ? detail.length : 0)
     
-    const records = parseDetailData(detail)
-    console.log('📤 [文件上传] 解析出下班记录数:', records.length)
-    rawRecords.value = records
+    const newRecords = parseDetailData(detail)
+    console.log('📤 [文件上传] 解析出下班记录数:', newRecords.length)
+    
+    // 合并新记录和现有记录，去重处理
+    const mergedRecords = mergeRecords(rawRecords.value, newRecords)
+    console.log('📤 [文件上传] 合并后记录数:', mergedRecords.length, '(原有:', rawRecords.value.length, '新增:', newRecords.length, ')')
+    
+    rawRecords.value = mergedRecords
 
     // 处理记录并计算统计
-    calculateAllMonthsStatistics(records)
+    calculateAllMonthsStatistics(mergedRecords)
   } catch (error) {
     console.error('❌ [文件上传] 处理失败:', error)
     alert('处理文件失败: ' + error.message)
   }
+}
+
+// 合并记录并去重
+const mergeRecords = (existingRecords, newRecords) => {
+  // 使用Map按日期存储记录，同一天保留最晚的打卡时间
+  const dateMap = new Map()
+  
+  // 先添加现有记录
+  existingRecords.forEach(record => {
+    const date = parseDate(record.date)
+    if (date) {
+      const dateStr = formatDate(date)
+      if (!dateMap.has(dateStr)) {
+        dateMap.set(dateStr, record)
+      } else {
+        // 如果已有记录，比较时间，保留最晚的
+        const existing = dateMap.get(dateStr)
+        const existingTime = parseTime(existing.time)
+        const currentTime = parseTime(record.time)
+        
+        if (currentTime && existingTime && currentTime > existingTime) {
+          dateMap.set(dateStr, record)
+        } else if (currentTime && !existingTime) {
+          dateMap.set(dateStr, record)
+        }
+      }
+    }
+  })
+  
+  // 再添加新记录，如果日期已存在，比较时间保留最晚的
+  newRecords.forEach(record => {
+    const date = parseDate(record.date)
+    if (date) {
+      const dateStr = formatDate(date)
+      if (!dateMap.has(dateStr)) {
+        dateMap.set(dateStr, record)
+      } else {
+        // 如果已有记录，比较时间，保留最晚的
+        const existing = dateMap.get(dateStr)
+        const existingTime = parseTime(existing.time)
+        const currentTime = parseTime(record.time)
+        
+        if (currentTime && existingTime && currentTime > existingTime) {
+          dateMap.set(dateStr, record)
+        } else if (currentTime && !existingTime) {
+          dateMap.set(dateStr, record)
+        }
+      }
+    }
+  })
+  
+  // 转换为数组并排序（按日期）
+  const result = Array.from(dateMap.values())
+  result.sort((a, b) => {
+    const dateA = parseDate(a.date)
+    const dateB = parseDate(b.date)
+    if (!dateA || !dateB) return 0
+    return dateA.getTime() - dateB.getTime()
+  })
+  
+  return result
+}
+
+// 解析时间字符串为小时数（用于比较）
+const parseTime = (timeStr) => {
+  if (!timeStr) return null
+  const parts = timeStr.split(':')
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0])
+    const minutes = parseInt(parts[1])
+    return hours + minutes / 60
+  }
+  return null
 }
 
 // 计算所有月份的统计数据
@@ -213,7 +291,7 @@ const calculateAllMonthsStatistics = (records) => {
   const months = detectMonths(records)
   
   // 为每个月份计算统计数据
-  const allMonthsData = months.map(({ year, month }) => {
+  const newMonthsData = months.map(({ year, month }) => {
     const stats = calculateMonthStatistics(year, month)
     return {
       year,
@@ -222,13 +300,32 @@ const calculateAllMonthsStatistics = (records) => {
     }
   })
   
-  monthsData.value = allMonthsData
+  // 合并新月份数据和现有月份数据，避免覆盖已有月份
+  const existingMonthsMap = new Map()
+  monthsData.value.forEach(m => {
+    const key = `${m.year}-${m.month}`
+    existingMonthsMap.set(key, m)
+  })
+  
+  // 更新或添加新月份数据
+  newMonthsData.forEach(newMonth => {
+    const key = `${newMonth.year}-${newMonth.month}`
+    existingMonthsMap.set(key, newMonth)
+  })
+  
+  // 转换为数组并排序（按年月）
+  monthsData.value = Array.from(existingMonthsMap.values()).sort((a, b) => {
+    if (a.year !== b.year) {
+      return a.year - b.year
+    }
+    return a.month - b.month
+  })
   
   // 设置默认选中的月份（只在没有选中月份或选中月份不在数据中时才设置）
-  if (allMonthsData.length > 0) {
+  if (monthsData.value.length > 0) {
     // 如果已有选中的月份，检查是否还在数据中
     if (activeMonth.value) {
-      const exists = allMonthsData.find(m => 
+      const exists = monthsData.value.find(m => 
         m.year === activeMonth.value.year && m.month === activeMonth.value.month
       )
       if (exists) {
@@ -242,13 +339,13 @@ const calculateAllMonthsStatistics = (records) => {
     const currentYear = today.getFullYear()
     const currentMonth = today.getMonth() + 1
     
-    const currentMonthData = allMonthsData.find(m => 
+    const currentMonthData = monthsData.value.find(m => 
       m.year === currentYear && m.month === currentMonth
     )
     
     activeMonth.value = currentMonthData 
       ? { year: currentYear, month: currentMonth }
-      : { year: allMonthsData[0].year, month: allMonthsData[0].month }
+      : { year: monthsData.value[0].year, month: monthsData.value[0].month }
   }
 
   // 保存到localStorage
