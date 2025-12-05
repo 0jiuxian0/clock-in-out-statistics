@@ -4,6 +4,15 @@
       <h1>打卡统计计算器</h1>
       <div class="header-actions">
         <button 
+          class="export-btn" 
+          @click="exportRecords"
+          :aria-label="'导出打卡记录'"
+          title="导出打卡记录为Excel"
+          :disabled="!rawRecords || rawRecords.length === 0"
+        >
+          📥 导出记录
+        </button>
+        <button 
           class="clear-cache-btn" 
           @click="clearCache"
           :aria-label="'清除缓存数据'"
@@ -62,6 +71,7 @@ import Statistics from './components/Statistics.vue'
 import SubsidyPreview from './components/SubsidyPreview.vue'
 import MonthTabs from './components/MonthTabs.vue'
 import { parseExcel, parseDetailData } from './utils/excelParser.js'
+import { exportToExcel } from './utils/excelExporter.js'
 import { processClockRecords, calculateTotalOvertime } from './utils/overtimeCalculator.js'
 import { getRemainingWorkdays, getTotalWorkdaysInMonth, getWorkdaysInMonth, parseDate } from './utils/workdayCalculator.js'
 import { detectMonths, formatMonthName } from './utils/monthDetector.js'
@@ -462,6 +472,21 @@ const updateCustomConfig = (config) => {
   }
   
   saveToLocalStorage()
+}
+
+// 导出打卡记录
+const exportRecords = () => {
+  if (!rawRecords.value || rawRecords.value.length === 0) {
+    alert('没有可导出的打卡记录')
+    return
+  }
+  
+  try {
+    exportToExcel(rawRecords.value, '打卡记录')
+  } catch (error) {
+    console.error('❌ [导出] 导出失败:', error)
+    alert('导出失败: ' + error.message)
+  }
 }
 
 // 清除缓存数据
