@@ -64,7 +64,7 @@
 
       <div class="calendar-section" :class="{ 'dark': isDarkMode }">
         <h3 class="calendar-section-title">打卡记录设置</h3>
-        <p class="calendar-section-hint">点击日期添加/排除打卡记录（蓝色=导入记录，黄色=自定义记录，灰色=无记录）</p>
+        <p class="calendar-section-hint">点击日期添加/排除打卡记录（蓝色=导入记录且未达到加班条件，⭐虚线边框=自定义记录，灰色=无记录，红色深浅=加班时长热力图）</p>
         <CalendarView
           :year="activeMonthYear"
           :month="activeMonthMonth"

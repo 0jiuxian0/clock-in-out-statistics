@@ -16,10 +16,12 @@
         :key="index"
         class="calendar-day"
         :class="getDayClass(day)"
+        :style="getDayStyle(day)"
         @click="handleDayClick(day)"
         :title="getDayTooltip(day)"
       >
         <span class="day-number">{{ day ? day.getDate() : '' }}</span>
+        <span v-if="day && isCustomRecord(day)" class="custom-indicator" :class="{ 'dark': isDarkMode }">⭐</span>
         <span v-if="day && getDayBadge(day)" class="day-badge" :class="getDayBadgeClass(day)">
           {{ getDayBadge(day) }}
         </span>
@@ -301,6 +303,120 @@ const hasOriginalClockRecord = (date) => {
   const dateStr = formatDate(date)
   return props.processedRecords.some(r => r.date === dateStr && !r.isCustom)
 }
+
+// 判断是否是自定义记录
+const isCustomRecord = (day) => {
+  if (!day || props.mode !== 'clock') return false
+  const dateStr = formatDate(day)
+  const customClockRecords = props.customConfig?.customClockRecords || []
+  return customClockRecords.some(r => r.date === dateStr)
+}
+
+// 解析时间字符串为小时数（用于自定义记录）
+const parseTime = (timeStr) => {
+  if (!timeStr) return null
+  const parts = timeStr.split(':')
+  if (parts.length >= 2) {
+    const hours = parseInt(parts[0])
+    const minutes = parseInt(parts[1])
+    return hours + minutes / 60
+  }
+  return null
+}
+
+// 获取日期的加班时长
+const getOvertimeHours = (day) => {
+  if (!day || props.mode !== 'clock') return 0
+  
+  const dateStr = formatDate(day)
+  const excludedClockRecords = props.customConfig?.excludedClockRecords || []
+  
+  // 如果已排除，返回0
+  if (excludedClockRecords.includes(dateStr)) {
+    return 0
+  }
+  
+  // 优先查找自定义记录
+  const customClockRecords = props.customConfig?.customClockRecords || []
+  const customRecord = customClockRecords.find(r => r.date === dateStr)
+  if (customRecord) {
+    // 如果有自定义记录但没有时间，返回0
+    if (!customRecord.time) return 0
+    // 计算自定义记录的加班时长
+    const time = parseTime(customRecord.time)
+    if (time === null || time < 19) return 0
+    const overtimeHours = time - 19.0
+    return Math.floor(overtimeHours * 2) / 2 // 向下取整到半小时
+  }
+  
+  // 查找原始记录
+  if (props.processedRecords) {
+    const record = props.processedRecords.find(r => r.date === dateStr && !r.isCustom)
+    if (record && record.overtimeHours) {
+      return record.overtimeHours
+    }
+  }
+  
+  return 0
+}
+
+// 获取日期的热力图样式
+const getDayStyle = (day) => {
+  if (!day || props.mode !== 'clock') return {}
+  
+  const overtimeHours = getOvertimeHours(day)
+  
+  // 如果加班时长为0，不应用热力图颜色
+  if (overtimeHours <= 0) {
+    return {}
+  }
+  
+  // 以半小时为单位，计算颜色深度
+  // 0.5小时 -> 浅红，1小时 -> 稍深，1.5小时 -> 更深，2小时及以上 -> 最深
+  const halfHourUnits = Math.floor(overtimeHours * 2) // 转换为半小时单位
+  const maxIntensity = 8 // 最大强度（对应4小时及以上）
+  const intensity = Math.min(halfHourUnits, maxIntensity)
+  
+  // 计算颜色：从浅红到深红
+  // 浅色模式：从 #ffe0e0 (255, 224, 224) 到 #ff0000 (255, 0, 0)
+  // 深色模式：从 #4a1a1a (74, 26, 26) 到 #ff0000 (255, 0, 0)
+  const baseRed = 255
+  
+  if (props.isDarkMode) {
+    // 深色模式：从暗红色到亮红色
+    // 起始颜色：rgb(74, 26, 26) - 暗红色
+    // 结束颜色：rgb(255, 0, 0) - 亮红色
+    const startRed = 74
+    const startGreen = 26
+    const startBlue = 26
+    const endRed = 255
+    const endGreen = 0
+    const endBlue = 0
+    
+    // 根据强度计算颜色（从暗红到亮红）
+    const ratio = intensity / maxIntensity
+    const red = Math.floor(startRed + (endRed - startRed) * ratio)
+    const green = Math.floor(startGreen + (endGreen - startGreen) * ratio)
+    const blue = Math.floor(startBlue + (endBlue - startBlue) * ratio)
+    
+    return {
+      backgroundColor: `rgb(${red}, ${green}, ${blue})`
+    }
+  } else {
+    // 浅色模式：从浅红到深红
+    const baseGreen = 224
+    const baseBlue = 224
+    
+    // 计算RGB值（红色分量保持255，绿色和蓝色分量递减）
+    const ratio = intensity / maxIntensity
+    const green = Math.floor(baseGreen * (1 - ratio * 0.8))
+    const blue = Math.floor(baseBlue * (1 - ratio * 0.8))
+    
+    return {
+      backgroundColor: `rgb(${baseRed}, ${green}, ${blue})`
+    }
+  }
+}
 </script>
 
 <style scoped>
@@ -402,6 +518,7 @@ const hasOriginalClockRecord = (date) => {
   position: relative;
   padding: 0.25rem;
   background: white;
+  overflow: visible;
 }
 
 .calendar-view.dark .calendar-day {
@@ -523,13 +640,29 @@ const hasOriginalClockRecord = (date) => {
 }
 
 .calendar-day.custom-clock {
-  background: #fff9c4;
+  /* 移除黄色背景，使用虚线边框标记 */
+  border-style: dashed;
+  border-width: 2px;
   border-color: #fbc02d;
 }
 
 .calendar-view.dark .calendar-day.custom-clock {
-  background: #f57f17;
   border-color: #fdd835;
+}
+
+/* 自定义记录指示器（右上角图标） */
+.custom-indicator {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  font-size: 0.7rem;
+  line-height: 1;
+  color: #fbc02d;
+  z-index: 2;
+}
+
+.calendar-view.dark .custom-indicator {
+  color: #fdd835;
 }
 
 @media (max-width: 768px) {
