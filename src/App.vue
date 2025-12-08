@@ -221,6 +221,7 @@ const handleFileUploaded = async (file) => {
 
 // 合并记录并去重
 const mergeRecords = (existingRecords, newRecords) => {
+  console.log('🔄 [记录合并] 开始合并记录 - 原有:', existingRecords.length, '新增:', newRecords.length)
   // 使用Map按日期存储记录，同一天保留最晚的打卡时间
   const dateMap = new Map()
   
@@ -243,16 +244,21 @@ const mergeRecords = (existingRecords, newRecords) => {
           dateMap.set(dateStr, record)
         }
       }
+    } else {
+      console.warn('⚠️ [记录合并] 无法解析日期:', record.date)
     }
   })
   
   // 再添加新记录，如果日期已存在，比较时间保留最晚的
+  let newRecordsAdded = 0
+  let newRecordsSkipped = 0
   newRecords.forEach(record => {
     const date = parseDate(record.date)
     if (date) {
       const dateStr = formatDate(date)
       if (!dateMap.has(dateStr)) {
         dateMap.set(dateStr, record)
+        newRecordsAdded++
       } else {
         // 如果已有记录，比较时间，保留最晚的
         const existing = dateMap.get(dateStr)
@@ -261,12 +267,21 @@ const mergeRecords = (existingRecords, newRecords) => {
         
         if (currentTime && existingTime && currentTime > existingTime) {
           dateMap.set(dateStr, record)
+          newRecordsAdded++
         } else if (currentTime && !existingTime) {
           dateMap.set(dateStr, record)
+          newRecordsAdded++
+        } else {
+          newRecordsSkipped++
         }
       }
+    } else {
+      console.warn('⚠️ [记录合并] 无法解析日期:', record.date)
+      newRecordsSkipped++
     }
   })
+  
+  console.log('🔄 [记录合并] 合并结果 - 新增记录:', newRecordsAdded, '跳过记录:', newRecordsSkipped)
   
   // 转换为数组并排序（按日期）
   const result = Array.from(dateMap.values())
@@ -502,7 +517,6 @@ const clearCache = () => {
     const currentMonth = today.getMonth() + 1
     
     // 重置数据
-    monthsData.value = []
     rawRecords.value = []
     processedRecords.value = []
     customConfig.value = {
@@ -512,7 +526,12 @@ const clearCache = () => {
       customClockRecords: []
     }
     
-    // 保留当前月份作为activeMonth，这样页面仍然会显示当月tab
+    // 重新初始化当前月份的统计数据，确保页面有内容显示
+    monthsData.value = [{ 
+      year: currentYear, 
+      month: currentMonth, 
+      stats: calculateMonthStatistics(currentYear, currentMonth) 
+    }]
     activeMonth.value = { year: currentYear, month: currentMonth }
     
     console.log('✅ [缓存清除] 已清除所有缓存数据')

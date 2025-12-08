@@ -40,6 +40,60 @@ export function parseExcel(file) {
 }
 
 /**
+ * 检测Excel格式类型
+ * @param {Array} data - Excel数据
+ * @returns {Object} 格式信息 { format: 'format1'|'format2', headerRow: number, dataStartRow: number }
+ */
+function detectFormat(data) {
+  if (!data || data.length === 0) {
+    return { format: 'format1', headerRow: 0, dataStartRow: 1 }
+  }
+  
+  // 检查第一行是否包含标题（格式2的特征）
+  const firstRow = data[0]
+  const firstRowStr = firstRow ? firstRow.map(cell => String(cell || '')).join('') : ''
+  
+  // 格式2：第一行包含"打卡详情"或"概况统计"
+  if (firstRowStr.includes('打卡详情') || firstRowStr.includes('概况统计')) {
+    console.log('📊 [Excel解析] 检测到格式2（Excel源文件格式）')
+    
+    // 查找表头行（包含"日期"和"打卡类型"的行）
+    let headerRow = -1
+    for (let i = 0; i < Math.min(10, data.length); i++) {
+      const row = data[i]
+      if (!row || row.length === 0) continue
+      const rowStr = row.map(cell => String(cell || '')).join('')
+      // 检查是否包含"日期"和"打卡类型"（或"类型"）
+      if (rowStr.includes('日期') && (rowStr.includes('打卡类型') || rowStr.includes('类型'))) {
+        headerRow = i
+        break
+      }
+    }
+    
+    if (headerRow === -1) {
+      console.warn('⚠️ [Excel解析] 无法找到表头行，使用默认位置')
+      headerRow = 2 // 格式2默认表头在第3行（索引2）
+    }
+    
+    // 数据起始行：表头行 + 2（跳过表头行和可能的空行）
+    // 对于详情sheet，表头后通常有一个空行，所以+2
+    let dataStartRow = headerRow + 2
+    
+    // 检查表头行+1是否是空行，如果不是，则数据从表头行+1开始
+    const nextRow = data[headerRow + 1]
+    if (nextRow && nextRow.length > 0 && !nextRow.every(cell => !cell || String(cell).trim() === '')) {
+      // 下一行不是空行，数据从表头行+1开始
+      dataStartRow = headerRow + 1
+    }
+    
+    return { format: 'format2', headerRow, dataStartRow }
+  } else {
+    console.log('📊 [Excel解析] 检测到格式1（智能表格导出格式）')
+    return { format: 'format1', headerRow: 0, dataStartRow: 1 }
+  }
+}
+
+/**
  * 解析打卡详情数据
  * @param {Array} detailData - 打卡详情原始数据
  * @returns {Array} 解析后的打卡记录
@@ -53,7 +107,16 @@ export function parseDetailData(detailData) {
     return []
   }
   
-  const headers = detailData[0]
+  // 检测格式
+  const formatInfo = detectFormat(detailData)
+  console.log('📊 [Excel解析] 格式信息:', formatInfo)
+  
+  const headers = detailData[formatInfo.headerRow]
+  if (!headers || headers.length === 0) {
+    console.error('❌ [Excel解析] 表头行为空')
+    throw new Error('Excel格式不正确，无法找到表头')
+  }
+  
   console.log('📊 [Excel解析] 表头:', headers)
   const records = []
   
@@ -112,9 +175,12 @@ export function parseDetailData(detailData) {
   let processedCount = 0
   let skippedCount = 0
   
-  for (let i = 1; i < detailData.length; i++) {
+  for (let i = formatInfo.dataStartRow; i < detailData.length; i++) {
     const row = detailData[i]
     if (!row || row.length === 0) continue
+    
+    // 跳过空行（格式2可能在表头后有空行）
+    if (row.every(cell => !cell || String(cell).trim() === '')) continue
     
     const date = row[dateIndex]
     const type = row[typeIndex]

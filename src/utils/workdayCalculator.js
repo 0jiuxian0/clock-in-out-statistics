@@ -102,18 +102,27 @@ export function getTotalWorkdaysInMonth(year, month, customConfig = {}) {
 
 /**
  * 解析日期字符串
- * @param {string} dateStr - 日期字符串，可能是 "2025年9月30日 星期二" 格式
+ * @param {string} dateStr - 日期字符串，可能是 "2025年9月30日 星期二" 或 "2025/11/28 星期五" 格式
  * @returns {Date|null}
  */
 export function parseDate(dateStr) {
   if (!dateStr) return null
   
   // 处理 "2025年9月30日 星期二" 格式
-  const match = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
-  if (match) {
-    const year = parseInt(match[1])
-    const month = parseInt(match[2])
-    const day = parseInt(match[3])
+  const match1 = dateStr.match(/(\d{4})年(\d{1,2})月(\d{1,2})日/)
+  if (match1) {
+    const year = parseInt(match1[1])
+    const month = parseInt(match1[2])
+    const day = parseInt(match1[3])
+    return new Date(year, month - 1, day)
+  }
+  
+  // 处理 "2025/11/28 星期五" 格式
+  const match2 = dateStr.match(/(\d{4})\/(\d{1,2})\/(\d{1,2})/)
+  if (match2) {
+    const year = parseInt(match2[1])
+    const month = parseInt(match2[2])
+    const day = parseInt(match2[3])
     return new Date(year, month - 1, day)
   }
   

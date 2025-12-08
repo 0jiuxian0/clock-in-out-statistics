@@ -8,6 +8,7 @@
       @drop.prevent="handleDrop"
     >
       <input 
+        ref="fileInput"
         type="file" 
         id="file-input" 
         accept=".xlsx,.xls"
@@ -33,11 +34,16 @@ const props = defineProps({
 const emit = defineEmits(['file-uploaded'])
 
 const isDragover = ref(false)
+const fileInput = ref(null)
 
 const handleFileSelect = (event) => {
   const file = event.target.files[0]
   if (file) {
     emit('file-uploaded', file)
+    // 清空input的value，确保下次选择同一文件时也能触发change事件
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
   }
 }
 
@@ -46,6 +52,10 @@ const handleDrop = (event) => {
   const file = event.dataTransfer.files[0]
   if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls'))) {
     emit('file-uploaded', file)
+    // 清空input的value
+    if (fileInput.value) {
+      fileInput.value.value = ''
+    }
   } else {
     alert('请上传Excel文件（.xlsx 或 .xls）')
   }
